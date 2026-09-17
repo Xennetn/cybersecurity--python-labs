@@ -25,7 +25,6 @@ class ValidationError(Exception):
     """Власний виняток для помилок валідації довжини пароля."""
 
 
-
 def generate_hash(password: str, salt: str = "00000") -> str:
     """Генерує хеш sha224 від конкатенації пароля та солі."""
     if not password or not salt:
@@ -51,9 +50,14 @@ def log_event(func):
         try:
             result = func(*args, **kwargs)
             status_str = "success" if result else "failure"
+        except (ValidationError, ValueError) as exc:
+            status_str = f"error: {type(exc).__name__}"
+            print(f"[Відхилено валідацією для {username}]: {exc}")
+            result = False
         except Exception as exc:
             status_str = f"error: {type(exc).__name__}"
-            raise
+            print(f"[Помилка виконання для {username}]: {exc}")
+            result = False
         finally:
             log_entry = {
                 "event": "login",
@@ -98,25 +102,32 @@ def create_user(username: str, password: str) -> tuple[str, str]:
 
 def create_users(users_list: tuple) -> None:
     """Зберігає список користувачів у файл users.csv."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(USERS_CSV_FILE, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-        for user, pwd in users_list:
-            u_name, u_hash = create_user(user, pwd)
-            writer.writerow([u_name, u_hash])
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(USERS_CSV_FILE, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.writer(csvfile)
+            for user, pwd in users_list:
+                u_name, u_hash = create_user(user, pwd)
+                writer.writerow([u_name, u_hash])
+    except (PermissionError, OSError) as err:
+        print(f"[Помилка запису бази]: {err}")
 
 
 def read_users_db() -> list[tuple[str, str]]:
     """Зчитує користувачів із CSV-файлу."""
-    if not os.path.exists(USERS_CSV_FILE):
-        raise FileNotFoundError(f"Файл {USERS_CSV_FILE} не знайдено.")
-
     users_db = []
-    with open(USERS_CSV_FILE, "r", encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            if row:
-                users_db.append((row[0], row[1]))
+    try:
+        if not os.path.exists(USERS_CSV_FILE):
+            raise FileNotFoundError(f"Файл {USERS_CSV_FILE} не знайдено.")
+
+        with open(USERS_CSV_FILE, "r", encoding="utf-8") as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if row:
+                    users_db.append((row[0], row[1]))
+    except (FileNotFoundError, PermissionError, OSError) as err:
+        print(f"[Помилка читання бази]: {err}")
+
     return users_db
 
 
@@ -162,44 +173,41 @@ def run_task3() -> None:
         ("guest_auditor", "TemporaryPasscode2026!"),
     )
 
-    try:
-        print("\n1. Реєстрація користувачів та збереження в CSV...")
-        create_users(users_to_register)
-        print("Користувачів успішно записано у файл users.csv.")
+    print("\n1. Реєстрація користувачів та збереження в CSV...")
+    create_users(users_to_register)
+    print("Користувачів успішно записано у файл users.csv.")
 
-        print("\n2. Зчитування зареєстрованих користувачів із бази:")
-        db_records = read_users_db()
-        header = f"{'Логін':<18} | {'Хеш пароля (SHA-224 + сіль)':<56}"
-        print(header)
-        print("-" * len(header))
-        for u, h in db_records:
-            print(f"{u:<18} | {h:<56}")
+    print("\n2. Зчитування зареєстрованих користувачів із бази:")
+    db_records = read_users_db()
+    header = f"{'Логін':<18} | {'Хеш пароля (SHA-224 + сіль)':<56}"
+    print(header)
+    print("-" * len(header))
+    for u, h in db_records:
+        print(f"{u:<18} | {h:<56}")
 
-        print("\n3. Тестування входу в систему:")
+    print("\n3. Тестування входу в систему:")
 
-        ok_res = login("cloud_admin", "SuperSecurePassword2026!")
-        print(
-            f"Вхід cloud_admin (правильний пароль): "
-            f"{'Успішно' if ok_res else 'Невдача'}"
-        )
+    ok_res = login("cloud_admin", "SuperSecurePassword2026!")
+    print(
+        f"Вхід cloud_admin (правильний пароль): "
+        f"{'Успішно' if ok_res else 'Невдача'}"
+    )
 
-        fail_res = login("cloud_admin", "WrongPasswordExample123!")
-        print(
-            f"Вхід cloud_admin (невірний пароль): "
-            f"{'Успішно' if fail_res else 'Невдача'}"
-        )
+    fail_res = login("cloud_admin", "WrongPasswordExample123!")
+    print(
+        f"Вхід cloud_admin (невірний пароль): "
+        f"{'Успішно' if fail_res else 'Невдача'}"
+    )
 
-        unknown_res = login("unknown_user", "SomeSecretPassword2026!")
-        print(f"Вхід unknown_user: {'Успішно' if unknown_res else 'Невдача'}")
+    unknown_res = login("unknown_user", "SomeSecretPassword2026!")
+    print(f"Вхід unknown_user: {'Успішно' if unknown_res else 'Невдача'}")
 
-        print("\n4. Перевірка обробки помилок валідації:")
-        try:
-            login("cloud_admin", "short")
-        except ValidationError as val_err:
-            print(f"Перехоплено очікуваний ValidationError: {val_err}")
-
-    except (OSError, FileNotFoundError, PermissionError, ValidationError, ValueError) as e:
-        print(f"[Критична помилка виконання]: {type(e).__name__} -> {e}")
+    print("\n4. Перевірка обробки помилок валідації:")
+    val_res = login("cloud_admin", "short")
+    print(
+        f"Вхід cloud_admin (короткий пароль): "
+        f"{'Успішно' if val_res else 'Невдача'}"
+    )
 
 
 if __name__ == "__main__":

@@ -99,14 +99,23 @@ def run_task2() -> None:
     print("Завдання 2: Багаторівнева система контролю доступу")
     print("=" * 80)
 
-    print("\n--- Список ресурсів системи та їхні рівні безпеки ---")
-    header_res = f"{'Ресурс':<24} | {'Числовий рівень':<16} | {'Рівень безпеки'}"
-    print(header_res)
-    print("-" * len(header_res))
+    # Перенесення збереження даних ресурсів у папку data/
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    resources_file = os.path.join(data_dir, "resources.txt")
 
-    for res_name, res_lvl in RESOURCES:
-        text_level = SECURITY_LEVELS[res_lvl - 1]
-        print(f"{res_name:<24} | {res_lvl:<16} | {text_level}")
+    with open(resources_file, "w", encoding="utf-8") as f:
+        f.write("=== Список ресурсів системи та їхні рівні безпеки ===\n")
+        header_res = (
+            f"{'Ресурс':<24} | {'Числовий рівень':<16} | {'Рівень безпеки'}\n"
+        )
+        f.write(header_res)
+        f.write("-" * 65 + "\n")
+        for res_name, res_lvl in RESOURCES:
+            text_level = SECURITY_LEVELS[res_lvl - 1]
+            f.write(f"{res_name:<24} | {res_lvl:<16} | {text_level}\n")
+
+    print(f"[+] Дані ресурсів успішно сформовано у: {resources_file}")
 
     print("\n--- Результати аудиту доступу користувачів ---")
     test_user_list = list(USERS.keys()) + ["unknown_intruder"]
