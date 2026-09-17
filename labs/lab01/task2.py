@@ -3,11 +3,9 @@
 import os
 import sys
 
-# Підключення спільного модуля
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 
-# Вхідні дані Варіанту 9
 USERS = {
     "cloud_architect": {
         "role": "cloud_security",
@@ -76,21 +74,18 @@ def check_access(
     blocked: set[str],
 ) -> str:
     """Перевіряє права доступу користувача до заданого ресурсу."""
-    # 1. Перевірка наявності користувача в базі
+
     if user not in users:
         return "DENY (User not found)"
 
-    # 2. Перевірка списку заблокованих
     if user in blocked:
         return "DENY (User is blocked)"
 
     user_info = users[user]
 
-    # 3. Перевірка активності облікового запису
     if not user_info.get("active", False):
         return "DENY (Account inactive)"
 
-    # 4. Перевірка рівня допуску (clearance)
     if user_info.get("clearance", 0) >= resource_level:
         return "ALLOW"
 
@@ -104,7 +99,6 @@ def run_task2() -> None:
     print("Завдання 2: Багаторівнева система контролю доступу")
     print("=" * 80)
 
-    # 1. Виведення списку ресурсів із заміною чисел на текстові назви
     print("\n--- Список ресурсів системи та їхні рівні безпеки ---")
     header_res = f"{'Ресурс':<24} | {'Числовий рівень':<16} | {'Рівень безпеки'}"
     print(header_res)
@@ -114,7 +108,6 @@ def run_task2() -> None:
         text_level = SECURITY_LEVELS[res_lvl - 1]
         print(f"{res_name:<24} | {res_lvl:<16} | {text_level}")
 
-    # 2. Перевірка доступу кожного користувача до кожного ресурсу
     print("\n--- Результати аудиту доступу користувачів ---")
     test_user_list = list(USERS.keys()) + ["unknown_intruder"]
 

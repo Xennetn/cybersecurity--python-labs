@@ -5,11 +5,9 @@ import random
 import string
 import sys
 
-# Підключення спільного модуля
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 
-# Вхідні дані Варіанту 9
 PASSWORDS = [
     "Digital@F0r3nsics",
     "plain",
@@ -47,7 +45,6 @@ def evaluate_password(
     forbidden: set[str],
 ) -> str:
     """Оцінює надійність пароля за правилами безпеки."""
-    # 1. Заборонений: у списку заборонених або занадто короткий
     if pwd in forbidden or len(pwd) < criteria["min_length"]:
         return "Заборонений"
 
@@ -56,7 +53,6 @@ def evaluate_password(
     has_lower = any(char.islower() for char in pwd)
     has_special = any(char in string.punctuation for char in pwd)
 
-    # Перевірка виконання обов'язкових умов надійності
     meets_all_mandatory = (
         len(pwd) >= criteria["min_length"]
         and (not criteria["require_digits"] or has_digit)
@@ -64,7 +60,6 @@ def evaluate_password(
         and (not criteria["require_special"] or has_special)
     )
 
-    # 2. Дуже сильний: всі критерії, довжина >= min + 4 і повна унікальність
     if (
         meets_all_mandatory
         and len(pwd) >= criteria["min_length"] + 4
@@ -72,16 +67,13 @@ def evaluate_password(
     ):
         return "Дуже сильний"
 
-    # 3. Сильний: всі критерії, але довжина < min + 4 або дублюється
     if meets_all_mandatory:
         return "Сильний"
 
-    # 4. Середній: достатня довжина і мінімум 2 типи символів
     type_matches = sum([has_digit, has_upper, has_lower, has_special])
     if len(pwd) >= criteria["min_length"] and type_matches >= 2:
         return "Середній"
 
-    # 5. Слабкий: відповідає хоча б одній групі символів
     if any([has_digit, has_upper, has_lower, has_special]):
         return "Слабкий"
 
@@ -95,7 +87,6 @@ def run_task1() -> None:
     print("Завдання 1: Комплексний аналізатор надійності паролів")
     print("=" * 80)
 
-    # Копіюємо список та штучно додаємо 3 випадкові дублікати
     working_list = list(PASSWORDS)
     random_indices = [random.randint(0, len(PASSWORDS) - 1) for _ in range(3)]
     for idx in random_indices:
@@ -103,7 +94,6 @@ def run_task1() -> None:
 
     print(f"Загальна кількість паролів (з дублікатами): {len(working_list)}\n")
 
-    # Форматування таблиці
     header = f"{'№':<4} | {'Пароль':<24} | {'Довжина':<8} | {'Надійність':<16}"
     print(header)
     print("-" * len(header))

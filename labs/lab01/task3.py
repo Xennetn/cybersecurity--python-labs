@@ -8,13 +8,11 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# Підключення персональних даних студента
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 )
 from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 
-# Константи варіанту 9
 MIN_PASSWORD_LENGTH = 13
 PERSONAL_SALT = f"{VARIANT_NUMBER:05d}"  # Рядок "00009"
 
@@ -165,12 +163,10 @@ def run_task3() -> None:
     )
 
     try:
-        # Реєстрація користувачів у CSV
         print("\n1. Реєстрація користувачів та збереження в CSV...")
         create_users(users_to_register)
         print("Користувачів успішно записано у файл users.csv.")
 
-        # Читання та виведення бази даних у вигляді таблиці
         print("\n2. Зчитування зареєстрованих користувачів із бази:")
         db_records = read_users_db()
         header = f"{'Логін':<18} | {'Хеш пароля (SHA-224 + сіль)':<56}"
@@ -179,7 +175,6 @@ def run_task3() -> None:
         for u, h in db_records:
             print(f"{u:<18} | {h:<56}")
 
-        # Демонстрація автентифікації та логування
         print("\n3. Тестування входу в систему:")
 
         ok_res = login("cloud_admin", "SuperSecurePassword2026!")
@@ -197,7 +192,6 @@ def run_task3() -> None:
         unknown_res = login("unknown_user", "SomeSecretPassword2026!")
         print(f"Вхід unknown_user: {'Успішно' if unknown_res else 'Невдача'}")
 
-        # Перевірка валідації короткого пароля
         print("\n4. Перевірка обробки помилок валідації:")
         try:
             login("cloud_admin", "short")
