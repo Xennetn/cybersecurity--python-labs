@@ -54,10 +54,6 @@ def log_event(func):
             status_str = f"error: {type(exc).__name__}"
             print(f"[Відхилено валідацією для {username}]: {exc}")
             result = False
-        except Exception as exc:
-            status_str = f"error: {type(exc).__name__}"
-            print(f"[Помилка виконання для {username}]: {exc}")
-            result = False
         finally:
             log_entry = {
                 "event": "login",
