@@ -3,7 +3,9 @@
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+)
 from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 
 USERS = {
@@ -74,7 +76,6 @@ def check_access(
     blocked: set[str],
 ) -> str:
     """Перевіряє права доступу користувача до заданого ресурсу."""
-
     if user not in users:
         return "DENY (User not found)"
 
@@ -92,31 +93,30 @@ def check_access(
     return "DENY (Insufficient clearance)"
 
 
+def display_resources() -> None:
+    """Виводить список ресурсів системи та їхні рівні безпеки."""
+    print("\n--- Список ресурсів системи та їхні рівні безпеки ---")
+    header_res = f"{'Ресурс':<24} | {'Числовий рівень':<16} | {'Рівень безпеки'}"
+    print(header_res)
+    print("-" * len(header_res))
+    for res_name, res_lvl in RESOURCES:
+        text_level = SECURITY_LEVELS[res_lvl - 1]
+        print(f"{res_name:<24} | {res_lvl:<16} | {text_level}")
+
+
 def run_task2() -> None:
     """Головна функція виконання Завдання 2."""
     print("=" * 80)
-    print(f"Студент: {STUDENT_NAME} | Група: {GROUP_NAME} | Варіант: {VARIANT_NUMBER}")
+    print(
+        f"Студент: {STUDENT_NAME} | Група: {GROUP_NAME} | Варіант: {VARIANT_NUMBER}"
+    )
     print("Завдання 2: Багаторівнева система контролю доступу")
     print("=" * 80)
 
-    # Перенесення збереження даних ресурсів у папку data/
-    data_dir = os.path.join(os.path.dirname(__file__), "data")
-    os.makedirs(data_dir, exist_ok=True)
-    resources_file = os.path.join(data_dir, "resources.txt")
+    # 1. Окремий виклик відображення ресурсів
+    display_resources()
 
-    with open(resources_file, "w", encoding="utf-8") as f:
-        f.write("=== Список ресурсів системи та їхні рівні безпеки ===\n")
-        header_res = (
-            f"{'Ресурс':<24} | {'Числовий рівень':<16} | {'Рівень безпеки'}\n"
-        )
-        f.write(header_res)
-        f.write("-" * 65 + "\n")
-        for res_name, res_lvl in RESOURCES:
-            text_level = SECURITY_LEVELS[res_lvl - 1]
-            f.write(f"{res_name:<24} | {res_lvl:<16} | {text_level}\n")
-
-    print(f"[+] Дані ресурсів успішно сформовано у: {resources_file}")
-
+    # 2. Аудит доступу користувачів
     print("\n--- Результати аудиту доступу користувачів ---")
     test_user_list = list(USERS.keys()) + ["unknown_intruder"]
 
