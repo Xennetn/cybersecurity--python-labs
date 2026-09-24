@@ -217,8 +217,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .ruff_cache/
-labs/lab01/data/users.csv
-labs/lab01/data/log.json
+data/
+**/data/
 
 data/
 labs/**/data/
