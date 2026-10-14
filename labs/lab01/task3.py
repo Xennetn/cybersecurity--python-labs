@@ -8,9 +8,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 
 MIN_PASSWORD_LENGTH = 13
@@ -64,8 +62,7 @@ def log_event(func):
                 ),
                 "args": safe_args,
                 "kwargs": {
-                    k: ("********" if k == "password" else v)
-                    for k, v in kwargs.items()
+                    k: ("********" if k == "password" else v) for k, v in kwargs.items()
                 },
             }
 
@@ -82,7 +79,7 @@ def log_event(func):
                 logs.append(log_entry)
                 with open(LOG_JSON_FILE, "w", encoding="utf-8") as f:
                     json.dump(logs, f, indent=4, ensure_ascii=False)
-            except (OSError, PermissionError) as err:
+            except (PermissionError, OSError) as err:
                 print(f"[Помилка запису логу]: {err}")
 
         return result
@@ -145,9 +142,7 @@ def login(username: str, password: str) -> bool:
 def run_task3() -> None:
     """Головна функція виконання Завдання 3."""
     print("=" * 80)
-    print(
-        f"Студент: {STUDENT_NAME} | Група: {GROUP_NAME} | Варіант: {VARIANT_NUMBER}"
-    )
+    print(f"Студент: {STUDENT_NAME} | Група: {GROUP_NAME} | Варіант: {VARIANT_NUMBER}")
     print("Завдання 3: Безпечне хешування, CSV-база та JSON-логування")
     print(
         f"Алгоритм: SHA-224 | Сіль: {PERSONAL_SALT} | "
@@ -184,26 +179,17 @@ def run_task3() -> None:
     print("\n3. Тестування входу в систему:")
 
     ok_res = login("cloud_admin", "SuperSecurePassword2026!")
-    print(
-        f"Вхід cloud_admin (правильний пароль): "
-        f"{'Успішно' if ok_res else 'Невдача'}"
-    )
+    print(f"Вхід cloud_admin (правильний пароль): {'Успішно' if ok_res else 'Невдача'}")
 
     fail_res = login("cloud_admin", "WrongPasswordExample123!")
-    print(
-        f"Вхід cloud_admin (невірний пароль): "
-        f"{'Успішно' if fail_res else 'Невдача'}"
-    )
+    print(f"Вхід cloud_admin (невірний пароль): {'Успішно' if fail_res else 'Невдача'}")
 
     unknown_res = login("unknown_user", "SomeSecretPassword2026!")
     print(f"Вхід unknown_user: {'Успішно' if unknown_res else 'Невдача'}")
 
     print("\n4. Перевірка обробки помилок валідації:")
     val_res = login("cloud_admin", "short")
-    print(
-        f"Вхід cloud_admin (короткий пароль): "
-        f"{'Успішно' if val_res else 'Невдача'}"
-    )
+    print(f"Вхід cloud_admin (короткий пароль): {'Успішно' if val_res else 'Невдача'}")
 
 
 if __name__ == "__main__":

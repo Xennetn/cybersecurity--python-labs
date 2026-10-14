@@ -1,4 +1,3 @@
-
 STUDENT_NAME = "Дудас Михайло Ігорович"
 GROUP_NAME = "КБ-208"
 VARIANT_NUMBER = 9

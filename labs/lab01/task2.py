@@ -3,9 +3,7 @@
 import os
 import sys
 
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 
 USERS = {
@@ -107,9 +105,7 @@ def display_resources() -> None:
 def run_task2() -> None:
     """Головна функція виконання Завдання 2."""
     print("=" * 80)
-    print(
-        f"Студент: {STUDENT_NAME} | Група: {GROUP_NAME} | Варіант: {VARIANT_NUMBER}"
-    )
+    print(f"Студент: {STUDENT_NAME} | Група: {GROUP_NAME} | Варіант: {VARIANT_NUMBER}")
     print("Завдання 2: Багаторівнева система контролю доступу")
     print("=" * 80)
 
