@@ -9,19 +9,29 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-MANDATORY_HEADERS = [
+MANDATORY_HEADERS = (
     "Strict-Transport-Security",
     "Content-Security-Policy",
     "X-Frame-Options",
     "X-Content-Type-Options",
-]
+)
 
-VERSION_LEAK_PATTERN = re.compile(r"(\d+(\.\d+)+|[a-zA-Z]+/\d+)")
+# Витік версії: "2.4.49", "nginx/1.18.0", "Microsoft-IIS/10.0"
+VERSION_LEAK_PATTERN = re.compile(r"\d+(?:\.\d+)+|[a-zA-Z]+/\d+")
+
+PENALTY_MISSING = 20
+PENALTY_MISSING_STRICT = 25
+PENALTY_LEAK = 15
+
+# (мінімальний бал, оцінка, статус) - від найвищого до найнижчого
+GRADES = ((90, "A+", "PASS"), (60, "C", "WARN"), (0, "F", "FAIL"))
+
+logger = logging.getLogger("http_auditor")
 
 
 @dataclass
 class AuditResult:
-    """Клас збереження результатів перевірки ресурсу."""
+    """Результат перевірки одного ресурсу."""
 
     target: str
     score: int
@@ -33,123 +43,89 @@ class AuditResult:
 
 def setup_logger(log_level: str) -> logging.Logger:
     """Налаштовує консольне логування аудиту."""
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    logger = logging.getLogger("http_auditor")
-    logger.setLevel(numeric_level)
-
+    logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter("[%(levelname)s] %(message)s")
-        handler.setFormatter(formatter)
+        handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
         logger.addHandler(handler)
-
     return logger
 
 
-def normalize_input_data(data: object) -> list[tuple[str, dict[str, str]]]:
-    """Нормалізує вхідні дані (список або словник) у єдиний формат (target, headers)."""
-    items: list[tuple[str, dict[str, str]]] = []
-    if isinstance(data, dict):
-        for target, headers in data.items():
-            if isinstance(headers, dict):
-                items.append(
-                    (str(target), {str(k): str(v) for k, v in headers.items()})
-                )
-    elif isinstance(data, list):
-        for idx, entry in enumerate(data, start=1):
-            if not isinstance(entry, dict):
-                continue
-            target = None
-            for key in (
-                "target",
-                "url",
-                "resource",
-                "site",
-                "host",
-                "endpoint",
-                "domain",
-            ):
-                if key in entry and isinstance(entry[key], str):
-                    target = entry[key]
-                    break
+def load_entries(path: Path) -> list[tuple[str, dict[str, str]]]:
+    """Читає JSON: список {url, headers} або словник {url: headers}."""
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
 
-            if "headers" in entry and isinstance(entry["headers"], dict):
-                headers = {str(k): str(v) for k, v in entry["headers"].items()}
-                target = target or f"Resource #{idx}"
-                items.append((target, headers))
-            else:
-                headers = {
-                    str(k): str(v)
-                    for k, v in entry.items()
-                    if k
-                    not in (
-                        "target",
-                        "url",
-                        "resource",
-                        "site",
-                        "host",
-                        "endpoint",
-                        "domain",
-                    )
-                }
-                target = target or f"Resource #{idx}"
-                items.append((target, headers))
-    return items
+    if isinstance(data, dict):
+        data = [{"url": url, "headers": hdrs} for url, hdrs in data.items()]
+    if not isinstance(data, list):
+        raise TypeError("Очікується список {url, headers} або словник {url: headers}.")
+
+    entries: list[tuple[str, dict[str, str]]] = []
+    for idx, item in enumerate(data, start=1):
+        if not isinstance(item, dict) or not isinstance(item.get("headers"), dict):
+            logger.warning("Запис #%d пропущено: немає об'єкта 'headers'.", idx)
+            continue
+        target = str(item.get("url") or item.get("target") or f"Resource #{idx}")
+        entries.append((target, {str(k): str(v) for k, v in item["headers"].items()}))
+    return entries
 
 
 def evaluate_resource(
     target: str, raw_headers: dict[str, str], strict: bool
 ) -> AuditResult:
     """Оцінює безпеку заголовків окремого ресурсу."""
-    headers_lower = {str(k).lower(): str(v) for k, v in raw_headers.items()}
+    headers = {k.lower(): v for k, v in raw_headers.items()}
 
-    missing: list[str] = []
-    score = 100
-
-    penalty_missing = 25 if strict else 20
-    for header in MANDATORY_HEADERS:
-        if header.lower() not in headers_lower:
-            missing.append(header)
-            score -= penalty_missing
+    missing = [h for h in MANDATORY_HEADERS if h.lower() not in headers]
 
     leaks: list[str] = []
-    server_val = headers_lower.get("server")
-    if server_val and VERSION_LEAK_PATTERN.search(server_val):
-        actual_name = next(
-            (v for k, v in raw_headers.items() if k.lower() == "server"), server_val
-        )
-        leaks.append(f"Server: {actual_name}")
-        score -= 15
+    server = headers.get("server", "")
+    if VERSION_LEAK_PATTERN.search(server):  # Server - лише якщо видно версію
+        leaks.append(f"Server: {server}")
+    if "x-powered-by" in headers:  # X-Powered-By розкриває стек сам по собі
+        leaks.append(f"X-Powered-By: {headers['x-powered-by']}")
 
-    x_powered = headers_lower.get("x-powered-by")
-    if x_powered:
-        actual_name = next(
-            (v for k, v in raw_headers.items() if k.lower() == "x-powered-by"),
-            x_powered,
-        )
-        leaks.append(f"X-Powered-By: {actual_name}")
-        score -= 15
+    penalty = PENALTY_MISSING_STRICT if strict else PENALTY_MISSING
+    score = max(0, 100 - penalty * len(missing) - PENALTY_LEAK * len(leaks))
 
-    score = max(0, score)
+    grade, status = next((g, s) for limit, g, s in GRADES if score >= limit)
+    return AuditResult(target, score, grade, status, missing, leaks)
 
-    if score >= 90:
-        grade = "A+"
-        status = "PASS"
-    elif score >= 60:
-        grade = "C"
-        status = "WARN"
-    else:
-        grade = "F"
-        status = "FAIL"
 
-    return AuditResult(
-        target=target,
-        score=score,
-        grade=grade,
-        status=status,
-        missing_headers=missing,
-        software_leaks=leaks,
+def print_table(results: list[AuditResult]) -> None:
+    """Виводить підсумкову таблицю з шириною за найдовшим ресурсом."""
+    width = max([len("Target Resource")] + [len(r.target) for r in results])
+    print(
+        f"\n{'Target Resource':<{width}} | {'Security Score':<14} | "
+        f"{'Status':<6} | Missing Security Headers"
     )
+    print("-" * (width + 60))
+    for r in results:
+        score = f"{r.score}/100 ({r.grade})"
+        missing = ", ".join(r.missing_headers) or "None"
+        print(f"{r.target:<{width}} | {score:<14} | {r.status:<6} | {missing}")
+
+
+def save_csv(results: list[AuditResult], path: Path) -> None:
+    """Зберігає результати аудиту у CSV."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            ["Target", "Score", "Grade", "Status", "MissingHeaders", "SoftwareLeaks"]
+        )
+        for r in results:
+            writer.writerow(
+                [
+                    r.target,
+                    r.score,
+                    r.grade,
+                    r.status,
+                    "; ".join(r.missing_headers),
+                    "; ".join(r.software_leaks),
+                ]
+            )
 
 
 def run_audit(
@@ -157,94 +133,60 @@ def run_audit(
 ) -> list[AuditResult]:
     """Виконує повний цикл аудиту заголовків."""
     logger.info("Auditing HTTP response headers from %s...", headers_path)
+    if not headers_path.is_file():
+        raise FileNotFoundError(f"Файл заголовків не знайдено: {headers_path}")
 
-    if not headers_path.exists():
-        logger.error("Файл заголовків не знайдено: %s", headers_path)
-        raise FileNotFoundError(f"Файл {headers_path} не існує.")
+    results = [
+        evaluate_resource(target, headers, strict)
+        for target, headers in load_entries(headers_path)
+    ]
+    if not results:
+        raise ValueError("У файлі немає жодного коректного запису для аудиту.")
 
-    with headers_path.open("r", encoding="utf-8") as f:
-        raw_data = json.load(f)
+    print_table(results)
 
-    entries = normalize_input_data(raw_data)
-
-    results: list[AuditResult] = []
-    for target, headers in entries:
-        res = evaluate_resource(target, headers, strict=strict)
-        results.append(res)
-
-    print(
-        f"\n{'Target Resource':<30} | {'Security Score':<18} | {'Status':<6} | {'Missing Security Headers'}"
-    )
-    print("-" * 95)
+    # Вимога методички: логування відсутніх заголовків
     for r in results:
-        score_str = f"{r.score}/100 ({r.grade})"
-        missing_str = ", ".join(r.missing_headers) if r.missing_headers else "None"
-        print(f"{r.target:<30} | {score_str:<18} | {r.status:<6} | {missing_str}")
+        if r.missing_headers:
+            logger.warning(
+                "%s: missing headers: %s", r.target, ", ".join(r.missing_headers)
+            )
 
     print("\n=== Server Software Leak Alerts ===")
-    leak_found = False
-    for r in results:
-        for leak in r.software_leaks:
-            leak_found = True
-            logger.warning("[LEAK] %s leaks info in '%s'", r.target, leak)
-    if not leak_found:
+    leaks = [(r.target, leak) for r in results for leak in r.software_leaks]
+    for target, leak in leaks:
+        logger.warning("[LEAK] %s leaks info in '%s'", target, leak)
+    if not leaks:
         print("Витоків інформації про версії ПЗ не виявлено.")
 
     if output_csv:
-        output_csv.parent.mkdir(parents=True, exist_ok=True)
-        with output_csv.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "Target",
-                    "Score",
-                    "Grade",
-                    "Status",
-                    "MissingHeaders",
-                    "SoftwareLeaks",
-                ]
-            )
-            for r in results:
-                writer.writerow(
-                    [
-                        r.target,
-                        r.score,
-                        r.grade,
-                        r.status,
-                        "; ".join(r.missing_headers),
-                        "; ".join(r.software_leaks),
-                    ]
-                )
+        save_csv(results, output_csv)
         logger.info("Header audit report saved to %s", output_csv)
 
     return results
 
 
-def main() -> None:
+def main() -> int:
     """Точка входу при окремому запуску task2.py."""
     parser = argparse.ArgumentParser(
         description="Аудитор безпеки HTTP-заголовків (Варіант 9)"
     )
+    parser.add_argument("--headers-file", type=Path, required=True)
+    parser.add_argument("--output-csv", type=Path, default=None)
+    parser.add_argument("--strict", action="store_true", help="Посилений режим")
     parser.add_argument(
-        "--headers-file", type=Path, required=True, help="Шлях до JSON-файлу заголовків"
+        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
     )
-    parser.add_argument(
-        "--output-csv", type=Path, default=None, help="Шлях для вивантаження CSV-звіту"
-    )
-    parser.add_argument(
-        "--strict", action="store_true", help="Посилений режим перевірки"
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Рівень логування",
-    )
-
     args = parser.parse_args()
-    logger = setup_logger(args.log_level)
-    run_audit(args.headers_file, args.output_csv, args.strict, logger)
+
+    log = setup_logger(args.log_level)
+    try:
+        run_audit(args.headers_file, args.output_csv, args.strict, log)
+    except (OSError, ValueError, TypeError) as exc:  # JSONDecodeError ⊂ ValueError
+        log.error("%s", exc)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
