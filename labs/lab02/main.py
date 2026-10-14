@@ -1,6 +1,7 @@
 """Головна точка входу для Лабораторної роботи №2 (підкоманди demo та analyze)."""
 
 import argparse
+from datetime import timedelta
 from pathlib import Path
 
 from labs.lab02.task1 import Admin, AuditLog, User, UserAccount
@@ -60,8 +61,18 @@ def run_demo() -> None:
         f"Результат входу: {ok_success} (is_authenticated: {account.is_authenticated()})"
     )
 
-    # 4. Спеціальні методи __getitem__ та __setitem__
-    print("\n4. Перевірка магічних методів __getitem__ та __setitem__:")
+    # 4. ДЕМОНСТРАЦІЯ ТАЙМАУТУ СЕСІЇ (Вимога методички)
+    print("\n4. Перевірка завершення сеансу за таймаутом (SESSION_TIMEOUT_SEC = 900):")
+    print(f"Активність сесії одразу після входу: {account.is_authenticated()}")
+    if account.session is not None:
+        # Штучно зміщуємо час останньої активності назад на 901 секунду
+        account.session.last_activity -= timedelta(seconds=901)
+        print(
+            f"Активність сесії після спливу 901 сек: {account.is_authenticated()} (Сеанс протерміновано)"
+        )
+
+    # 5. Спеціальні методи __getitem__ та __setitem__
+    print("\n5. Перевірка магічних методів __getitem__ та __setitem__:")
     print(f"account['username'] : {account['username']}")
     print(f"account['email']    : {account['email']}")
     account["email"] = "new_security_contact@polynet.lviv.ua"
@@ -72,7 +83,7 @@ def run_demo() -> None:
     except KeyError as e:
         print(f"[Успішно захищено]: Спроба отримати хеш викликала {type(e).__name__}")
 
-    # 5. Вихід та демонстрація журналу аудиту
+    # 6. Вихід та демонстрація журналу аудиту
     account.logout()
     print("\nКористувач вийшов із системи.")
     audit.show_all()
