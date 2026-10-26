@@ -1,6 +1,7 @@
 """Головна точка входу для Лабораторної роботи №2 (підкоманди demo та analyze)."""
 
 import argparse
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -107,13 +108,13 @@ def main() -> None:
     analyze_parser.add_argument(
         "--headers-file",
         type=Path,
-        default=Path("labs/lab02/data/headers.json"),
+        default=Path("labs/lab02/data/data_v09/headers.json"),
         help="Шлях до файлу заголовків",
     )
     analyze_parser.add_argument(
         "--output-csv",
         type=Path,
-        default=Path("labs/lab02/data/audit_report.csv"),
+        default=Path("labs/lab02/data/headers_audit.csv"),
         help="Шлях до файлу CSV звіту",
     )
     analyze_parser.add_argument(
@@ -132,7 +133,11 @@ def main() -> None:
         run_demo()
     elif args.subcommand == "analyze":
         logger = setup_logger(args.log_level)
-        run_audit(args.headers_file, args.output_csv, args.strict, logger)
+        try:
+            run_audit(args.headers_file, args.output_csv, args.strict, logger)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.error("%s", exc)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

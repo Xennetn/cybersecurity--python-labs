@@ -53,8 +53,24 @@ def setup_logger(log_level: str) -> logging.Logger:
 
 def load_entries(path: Path) -> list[tuple[str, dict[str, str]]]:
     """Читає JSON: список {url, headers} або словник {url: headers}."""
-    with path.open(encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        logger.error("Файл не знайдено: %s", path)
+        return []
+    except PermissionError:
+        logger.error("Немає прав на читання файлу: %s", path)
+        return []
+    except json.JSONDecodeError as exc:
+        logger.error("Некоректний JSON у %s: %s (рядок %d)", path, exc.msg, exc.lineno)
+        return []
+    except UnicodeDecodeError:
+        logger.error("Файл %s має бути в кодуванні UTF-8.", path)
+        return []
+    except OSError as exc:
+        logger.error("Помилка читання %s: %s", path, exc)
+        return []
 
     if isinstance(data, dict):
         data = [{"url": url, "headers": hdrs} for url, hdrs in data.items()]
@@ -95,37 +111,56 @@ def evaluate_resource(
 
 def print_table(results: list[AuditResult]) -> None:
     """Виводить підсумкову таблицю з шириною за найдовшим ресурсом."""
-    width = max([len("Target Resource")] + [len(r.target) for r in results])
-    print(
-        f"\n{'Target Resource':<{width}} | {'Security Score':<14} | "
-        f"{'Status':<6} | Missing Security Headers"
-    )
-    print("-" * (width + 60))
-    for r in results:
-        score = f"{r.score}/100 ({r.grade})"
-        missing = ", ".join(r.missing_headers) or "None"
-        print(f"{r.target:<{width}} | {score:<14} | {r.status:<6} | {missing}")
+    try:
+        width = max([len("Target Resource")] + [len(r.target) for r in results])
+        print(
+            f"\n{'Target Resource':<{width}} | {'Security Score':<14} | "
+            f"{'Status':<6} | Missing Security Headers"
+        )
+        print("-" * (width + 60))
+        for r in results:
+            score = f"{r.score}/100 ({r.grade})"
+            missing = ", ".join(r.missing_headers) or "None"
+            print(f"{r.target:<{width}} | {score:<14} | {r.status:<6} | {missing}")
+    except UnicodeEncodeError:
+        logger.error("Термінал не підтримує символи з назв ресурсів.")
+    except OSError as exc:
+        logger.error("Не вдалося вивести таблицю: %s", exc)
 
 
 def save_csv(results: list[AuditResult], path: Path) -> None:
     """Зберігає результати аудиту у CSV."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            ["Target", "Score", "Grade", "Status", "MissingHeaders", "SoftwareLeaks"]
-        )
-        for r in results:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
             writer.writerow(
                 [
-                    r.target,
-                    r.score,
-                    r.grade,
-                    r.status,
-                    "; ".join(r.missing_headers),
-                    "; ".join(r.software_leaks),
+                    "Target",
+                    "Score",
+                    "Grade",
+                    "Status",
+                    "MissingHeaders",
+                    "SoftwareLeaks",
                 ]
             )
+            for r in results:
+                writer.writerow(
+                    [
+                        r.target,
+                        r.score,
+                        r.grade,
+                        r.status,
+                        "; ".join(r.missing_headers),
+                        "; ".join(r.software_leaks),
+                    ]
+                )
+    except PermissionError:
+        logger.error("Немає прав на запис звіту: %s", path)
+    except OSError as exc:
+        logger.error("Не вдалося записати звіт %s: %s", path, exc)
+    else:
+        logger.info("Header audit report saved to %s", path)
 
 
 def run_audit(
@@ -136,10 +171,12 @@ def run_audit(
     if not headers_path.is_file():
         raise FileNotFoundError(f"Файл заголовків не знайдено: {headers_path}")
 
-    results = [
-        evaluate_resource(target, headers, strict)
-        for target, headers in load_entries(headers_path)
-    ]
+    results: list[AuditResult] = []
+    for target, headers in load_entries(headers_path):
+        try:
+            results.append(evaluate_resource(target, headers, strict))
+        except (AttributeError, TypeError, ValueError) as exc:
+            logger.error("Ресурс %s пропущено через помилку оцінки: %s", target, exc)
     if not results:
         raise ValueError("У файлі немає жодного коректного запису для аудиту.")
 
@@ -161,7 +198,6 @@ def run_audit(
 
     if output_csv:
         save_csv(results, output_csv)
-        logger.info("Header audit report saved to %s", output_csv)
 
     return results
 
